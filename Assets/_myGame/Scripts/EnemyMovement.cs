@@ -80,6 +80,10 @@ public class EnemyMovement : MonoBehaviour
         {
             enemyStats.OnDeath += HandleDeath;
         }
+
+        rb.freezeRotation = true;
+        rb.gravityScale = 0f;
+        rb.bodyType = RigidbodyType2D.Kinematic;
     }
 
     void Update()
@@ -116,8 +120,13 @@ public class EnemyMovement : MonoBehaviour
             case EnemyState.Attacking:
                 if (!isAttacking)
                 {
-                    // Return to chasing after attack is complete
                     currentState = EnemyState.Chasing;
+                }
+                // Add fallback - if too far away, go back to chasing
+                else if (distanceToPlayer > attackRange * 1.5f)
+                {
+                    currentState = EnemyState.Chasing;
+                    isAttacking = false;
                 }
                 break;
         }
@@ -133,9 +142,19 @@ public class EnemyMovement : MonoBehaviour
             case EnemyState.Chasing:
                 if (!isAttacking)
                 {
-                    // Always move towards player when chasing
-                    targetVelocity = moveDirection * moveSpeed;
-                    isMoving = true;
+                    if (rb.bodyType == RigidbodyType2D.Kinematic)
+                    {
+                        // Kinematic movement (no physics interactions)
+                        Vector3 newPosition = transform.position + (Vector3)moveDirection * moveSpeed * Time.deltaTime;
+                        transform.position = newPosition;
+                        isMoving = true;
+                    }
+                    else
+                    {
+                        // Physics-based movement (original code)
+                        targetVelocity = moveDirection * moveSpeed;
+                        isMoving = true;
+                    }
 
                     // Handle rotation to face player
                     if (canRotateToFacePlayer)
@@ -154,19 +173,23 @@ public class EnemyMovement : MonoBehaviour
                 break;
         }
 
-        // Apply movement
-        if (smoothMovement)
+        // Apply movement (only for non-kinematic bodies)
+        if (rb.bodyType != RigidbodyType2D.Kinematic)
         {
-            rb.linearVelocity = Vector2.Lerp(rb.linearVelocity, targetVelocity, Time.deltaTime * 8f);
-        }
-        else
-        {
-            rb.linearVelocity = targetVelocity;
+            if (smoothMovement)
+            {
+                rb.linearVelocity = Vector2.Lerp(rb.linearVelocity, targetVelocity, Time.deltaTime * 8f);
+            }
+            else
+            {
+                rb.linearVelocity = targetVelocity;
+            }
         }
 
         // Update animations based on movement
         UpdateAnimations();
     }
+
 
     void RotateTowardsPlayer()
     {
