@@ -6,6 +6,7 @@ public class EnemyMovement : MonoBehaviour
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 3f;
     [SerializeField] private float attackRange = 2f;
+    [SerializeField] private float stopDistance = 1.5f; // NEW: Distance to stop from player
     [SerializeField] private float rotationSpeed = 360f;
     [SerializeField] private bool smoothMovement = true;
 
@@ -21,6 +22,7 @@ public class EnemyMovement : MonoBehaviour
     private EnemyStats enemyStats;
     private EnemyAnimator enemyAnimator;
     private Transform player;
+    private PlayerStats playerStats; // NEW: Reference to player stats
 
     // State variables
     private bool canAttack = true;
@@ -34,7 +36,8 @@ public class EnemyMovement : MonoBehaviour
     {
         Chasing,
         Attacking,
-        Dead
+        Dead,
+        Idle // NEW: For when player is dead
     }
 
     private EnemyState currentState = EnemyState.Chasing;
@@ -57,6 +60,7 @@ public class EnemyMovement : MonoBehaviour
         if (playerObject != null)
         {
             player = playerObject.transform;
+            playerStats = playerObject.GetComponent<PlayerStats>(); // NEW: Get player stats
         }
         else
         {
@@ -81,9 +85,23 @@ public class EnemyMovement : MonoBehaviour
             enemyStats.OnDeath += HandleDeath;
         }
 
+        // NEW: Subscribe to player death event
+        if (playerStats != null)
+        {
+            playerStats.OnDeath += HandlePlayerDeath;
+            playerStats.OnRevive += HandlePlayerRevive;
+        }
+
         rb.freezeRotation = true;
         rb.gravityScale = 0f;
         rb.bodyType = RigidbodyType2D.Kinematic;
+
+        // NEW: Ensure stop distance is less than attack range
+        if (stopDistance >= attackRange)
+        {
+            stopDistance = attackRange * 0.8f;
+            Debug.LogWarning($"Stop distance adjusted to {stopDistance} to be less than attack range");
+        }
     }
 
     void Update()
@@ -108,6 +126,17 @@ public class EnemyMovement : MonoBehaviour
 
     void UpdateState()
     {
+        // NEW: Check if player is dead first
+        if (playerStats != null && playerStats.IsDead())
+        {
+            if (currentState != EnemyState.Idle)
+            {
+                currentState = EnemyState.Idle;
+                isAttacking = false; // Stop any current attack
+            }
+            return;
+        }
+
         switch (currentState)
         {
             case EnemyState.Chasing:
@@ -129,6 +158,10 @@ public class EnemyMovement : MonoBehaviour
                     isAttacking = false;
                 }
                 break;
+
+            case EnemyState.Idle:
+                // Stay idle until player is revived
+                break;
         }
     }
 
@@ -140,7 +173,7 @@ public class EnemyMovement : MonoBehaviour
         switch (currentState)
         {
             case EnemyState.Chasing:
-                if (!isAttacking)
+                if (!isAttacking && distanceToPlayer > stopDistance) // NEW: Only move if beyond stop distance
                 {
                     if (rb.bodyType == RigidbodyType2D.Kinematic)
                     {
@@ -162,6 +195,11 @@ public class EnemyMovement : MonoBehaviour
                         RotateTowardsPlayer();
                     }
                 }
+                else if (canRotateToFacePlayer)
+                {
+                    // NEW: Still face player even when not moving
+                    RotateTowardsPlayer();
+                }
                 break;
 
             case EnemyState.Attacking:
@@ -170,6 +208,10 @@ public class EnemyMovement : MonoBehaviour
                 {
                     RotateTowardsPlayer();
                 }
+                break;
+
+            case EnemyState.Idle:
+                // NEW: No movement when player is dead
                 break;
         }
 
@@ -189,7 +231,6 @@ public class EnemyMovement : MonoBehaviour
         // Update animations based on movement
         UpdateAnimations();
     }
-
 
     void RotateTowardsPlayer()
     {
@@ -211,7 +252,9 @@ public class EnemyMovement : MonoBehaviour
 
     void HandleAttack()
     {
-        if (currentState == EnemyState.Attacking && canAttack && !isAttacking)
+        // NEW: Don't attack if player is dead
+        if (currentState == EnemyState.Attacking && canAttack && !isAttacking &&
+            (playerStats == null || !playerStats.IsDead()))
         {
             StartCoroutine(PerformAttack());
         }
@@ -231,11 +274,10 @@ public class EnemyMovement : MonoBehaviour
         // Wait for attack duration
         yield return new WaitForSeconds(attackDuration);
 
-        // Deal damage to player if still in range
-        if (distanceToPlayer <= attackRange)
+        // Deal damage to player if still in range AND player is alive
+        if (distanceToPlayer <= attackRange && playerStats != null && !playerStats.IsDead())
         {
-            PlayerStats playerStats = player.GetComponent<PlayerStats>();
-            if (playerStats != null && enemyStats != null)
+            if (enemyStats != null)
             {
                 playerStats.TakeDamage(enemyStats.GetDamage());
             }
@@ -256,6 +298,13 @@ public class EnemyMovement : MonoBehaviour
         if (currentState == EnemyState.Dead)
         {
             // Death animation is handled in HandleDeath
+            return;
+        }
+
+        // NEW: Play idle when player is dead
+        if (currentState == EnemyState.Idle)
+        {
+            enemyAnimator.PlayAnimation("Idle");
             return;
         }
 
@@ -302,6 +351,28 @@ public class EnemyMovement : MonoBehaviour
         StartCoroutine(DestroyAfterDelay(3f));
     }
 
+    // NEW: Handle when player dies
+    void HandlePlayerDeath()
+    {
+        currentState = EnemyState.Idle;
+        isAttacking = false;
+
+        // Stop any ongoing attack coroutines
+        StopAllCoroutines();
+
+        // Reset attack state
+        canAttack = true;
+    }
+
+    // NEW: Handle when player is revived
+    void HandlePlayerRevive()
+    {
+        if (currentState == EnemyState.Idle && enemyStats != null && !enemyStats.IsDead())
+        {
+            currentState = EnemyState.Chasing;
+        }
+    }
+
     IEnumerator DestroyAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
@@ -316,6 +387,15 @@ public class EnemyMovement : MonoBehaviour
     // Public methods for external control
     public void SetMoveSpeed(float newSpeed) => moveSpeed = newSpeed;
     public void SetAttackRange(float newRange) => attackRange = newRange;
+    public void SetStopDistance(float newStopDistance) // NEW: Method to adjust stop distance
+    {
+        stopDistance = newStopDistance;
+        // Ensure stop distance is less than attack range
+        if (stopDistance >= attackRange)
+        {
+            stopDistance = attackRange * 0.8f;
+        }
+    }
 
     // Damage the enemy (called by player attacks)
     public void TakeDamage(int damage)
@@ -333,6 +413,13 @@ public class EnemyMovement : MonoBehaviour
         {
             enemyStats.OnDeath -= HandleDeath;
         }
+
+        // NEW: Unsubscribe from player events
+        if (playerStats != null)
+        {
+            playerStats.OnDeath -= HandlePlayerDeath;
+            playerStats.OnRevive -= HandlePlayerRevive;
+        }
     }
 
     // Debug visualization
@@ -341,6 +428,10 @@ public class EnemyMovement : MonoBehaviour
         // Draw attack range
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        // NEW: Draw stop distance
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, stopDistance);
 
         // Draw line to player if in game
         if (Application.isPlaying && player != null)

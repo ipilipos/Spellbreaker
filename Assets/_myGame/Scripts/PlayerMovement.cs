@@ -12,10 +12,33 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private bool enableController = true;
     [SerializeField] private float deadZone = 0.1f;
 
+    [Header("Attack Settings")]
+    [SerializeField] private float attackRange = 3f;
+    [SerializeField] private float attackCooldown = 1f;
+    [SerializeField] private LayerMask enemyLayerMask = -1; // Which layers contain enemies
+    [SerializeField] private bool autoAttack = true; // Automatically attack when in range
+    [SerializeField] private bool manualAttackInput = true; // Allow manual attacks with input
+
+    [Header("Attack Input")]
+    [SerializeField] private KeyCode attackKey = KeyCode.Space;
+    [SerializeField] private string attackButton = "Fire1"; // Left mouse button by default
+
+    [Header("Visual Feedback")]
+    [SerializeField] private bool showAttackRange = true;
+    [SerializeField] private Color attackRangeColor = Color.blue;
+    [SerializeField] private bool showAttackEffect = true;
+    [SerializeField] private float attackEffectDuration = 0.2f;
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip attackSound;
+    [SerializeField] private AudioClip hitSound;
+
     // Components
     private Rigidbody2D rb;
     private CharacterAnimator characterAnimator;
     private SpriteRenderer spriteRenderer;
+    private PlayerStats playerStats;
+    private AudioSource audioSource;
 
     // Movement variables
     private Vector2 moveInput;
@@ -25,11 +48,19 @@ public class PlayerMovement : MonoBehaviour
     private bool isMoving;
     private string currentAnimation = "";
 
+    // Attack variables
+    private bool canAttack = true;
+    private bool isAttacking = false;
+    private List<EnemyMovement> enemiesInRange = new List<EnemyMovement>();
+    private EnemyMovement currentTarget;
+    private LineRenderer attackEffect;
+
     void Start()
     {
         // Get required components
         rb = GetComponent<Rigidbody2D>();
         characterAnimator = GetComponent<CharacterAnimator>();
+        playerStats = GetComponent<PlayerStats>();
 
         // Get sprite renderer from child CharacterGFX
         Transform characterGFX = transform.Find("CharacterGFX");
@@ -57,19 +88,50 @@ public class PlayerMovement : MonoBehaviour
             BoxCollider2D col = gameObject.AddComponent<BoxCollider2D>();
             col.size = new Vector2(1f, 2f);
         }
+
+        // Add AudioSource if not present
+        if (audioSource == null && (attackSound != null || hitSound != null))
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+        }
+
+        // Create attack effect (optional visual feedback)
+        if (showAttackEffect)
+        {
+            CreateAttackEffect();
+        }
+
+        // Subscribe to player death to stop attacking
+        if (playerStats != null)
+        {
+            playerStats.OnDeath += OnPlayerDeath;
+        }
     }
 
     void Update()
     {
         HandleInput();
-        // No ground checking needed for no-gravity game
         HandleAnimations();
+
+        // Attack system updates (only if player is alive)
+        if (playerStats == null || !playerStats.IsDead())
+        {
+            DetectEnemiesInRange();
+            HandleAttackInput();
+            UpdateTargeting();
+
+            // Auto attack if enabled and we have a target
+            if (autoAttack && currentTarget != null && canAttack && !isAttacking)
+            {
+                StartAttack();
+            }
+        }
     }
 
     void FixedUpdate()
     {
         HandleMovement();
-        // No jump handling needed for no-gravity game
     }
 
     void HandleInput()
@@ -149,15 +211,18 @@ public class PlayerMovement : MonoBehaviour
         isMoving = rb.linearVelocity.magnitude > 0.1f;
     }
 
-   
-
-   
-
     void HandleAnimations()
     {
         if (characterAnimator == null) return;
 
         string targetAnimation = "";
+
+        // Check if we're attacking first
+        if (isAttacking)
+        {
+            // Don't change animation while attacking
+            return;
+        }
 
         // Simple animation logic - only Run when moving, Idle when not
         if (isMoving)
@@ -177,6 +242,185 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    // ATTACK SYSTEM METHODS
+
+    void DetectEnemiesInRange()
+    {
+        enemiesInRange.Clear();
+
+        // Find all enemies in attack range
+        Collider2D[] enemyColliders = Physics2D.OverlapCircleAll(transform.position, attackRange, enemyLayerMask);
+
+        foreach (Collider2D enemyCollider in enemyColliders)
+        {
+            EnemyMovement enemy = enemyCollider.GetComponent<EnemyMovement>();
+            EnemyStats enemyStats = enemyCollider.GetComponent<EnemyStats>();
+
+            // Only add living enemies
+            if (enemy != null && enemyStats != null && !enemyStats.IsDead())
+            {
+                enemiesInRange.Add(enemy);
+            }
+        }
+    }
+
+    void UpdateTargeting()
+    {
+        // Find the closest enemy as our target
+        currentTarget = null;
+        float closestDistance = float.MaxValue;
+
+        foreach (EnemyMovement enemy in enemiesInRange)
+        {
+            if (enemy == null) continue;
+
+            float distance = Vector2.Distance(transform.position, enemy.transform.position);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                currentTarget = enemy;
+            }
+        }
+    }
+
+    void HandleAttackInput()
+    {
+        if (!manualAttackInput) return;
+
+        bool attackInput = Input.GetKeyDown(attackKey) || Input.GetButtonDown(attackButton);
+
+        if (attackInput && canAttack && !isAttacking && currentTarget != null)
+        {
+            StartAttack();
+        }
+    }
+
+    void StartAttack()
+    {
+        if (!canAttack || isAttacking || currentTarget == null) return;
+
+        StartCoroutine(PerformAttack());
+    }
+
+    IEnumerator PerformAttack()
+    {
+        isAttacking = true;
+        canAttack = false;
+
+        // Randomly select one of the three Duelist attack animations
+        if (characterAnimator != null)
+        {
+            string[] duelistAttacks = { "Attack1", "Attack2", "Special" }; // Special maps to "Attack 3 DUELIST"
+            string selectedAttack = duelistAttacks[Random.Range(0, duelistAttacks.Length)];
+
+            characterAnimator.ChangeAnimation(selectedAttack);
+            currentAnimation = selectedAttack; // Update current animation tracker
+        }
+
+        // Play attack sound
+        if (attackSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(attackSound);
+        }
+
+        // Show attack effect
+        if (showAttackEffect && currentTarget != null)
+        {
+            ShowAttackEffect(currentTarget.transform.position);
+        }
+
+        // Wait for a brief moment (attack windup)
+        yield return new WaitForSeconds(0.3f);
+
+        // Deal damage if target is still valid and in range
+        if (currentTarget != null)
+        {
+            float distanceToTarget = Vector2.Distance(transform.position, currentTarget.transform.position);
+
+            if (distanceToTarget <= attackRange)
+            {
+                EnemyStats enemyStats = currentTarget.GetComponent<EnemyStats>();
+                if (enemyStats != null && !enemyStats.IsDead())
+                {
+                    // Deal damage using player's damage stat
+                    int damageAmount = playerStats != null ? playerStats.GetDamage() : 30;
+                    enemyStats.TakeDamage(damageAmount);
+
+                    // Play hit sound
+                    if (hitSound != null && audioSource != null)
+                    {
+                        audioSource.PlayOneShot(hitSound);
+                    }
+                }
+            }
+        }
+
+        // Wait for rest of attack duration
+        yield return new WaitForSeconds(0.2f);
+
+        isAttacking = false;
+
+        // Wait for cooldown
+        yield return new WaitForSeconds(attackCooldown);
+
+        canAttack = true;
+    }
+
+    void CreateAttackEffect()
+    {
+        // Create a simple line renderer for attack effect
+        GameObject effectObj = new GameObject("AttackEffect");
+        effectObj.transform.SetParent(transform);
+        effectObj.transform.localPosition = Vector3.zero;
+
+        attackEffect = effectObj.AddComponent<LineRenderer>();
+
+        // Create material and set color
+        Material attackMaterial = new Material(Shader.Find("Sprites/Default"));
+        attackMaterial.color = Color.white;
+        attackEffect.material = attackMaterial;
+
+        attackEffect.startWidth = 0.1f;
+        attackEffect.endWidth = 0.05f;
+        attackEffect.positionCount = 2;
+        attackEffect.enabled = false;
+        attackEffect.sortingOrder = 100;
+    }
+
+    void ShowAttackEffect(Vector3 targetPosition)
+    {
+        if (attackEffect != null)
+        {
+            StartCoroutine(AttackEffectCoroutine(targetPosition));
+        }
+    }
+
+    IEnumerator AttackEffectCoroutine(Vector3 targetPosition)
+    {
+        if (attackEffect == null) yield break;
+
+        attackEffect.enabled = true;
+        attackEffect.SetPosition(0, transform.position);
+        attackEffect.SetPosition(1, targetPosition);
+
+        yield return new WaitForSeconds(attackEffectDuration);
+
+        attackEffect.enabled = false;
+    }
+
+    void OnPlayerDeath()
+    {
+        // Stop attacking when player dies
+        StopAllCoroutines();
+        isAttacking = false;
+        canAttack = false;
+
+        if (attackEffect != null)
+        {
+            attackEffect.enabled = false;
+        }
+    }
+
     void Flip()
     {
         facingRight = !facingRight;
@@ -193,12 +437,31 @@ public class PlayerMovement : MonoBehaviour
         // }
     }
 
-  
+    void OnDestroy()
+    {
+        // Unsubscribe from events
+        if (playerStats != null)
+        {
+            playerStats.OnDeath -= OnPlayerDeath;
+        }
+    }
 
     // Public methods for external scripts
     public bool IsMoving() => isMoving;
     public float GetMoveInput() => moveInput.magnitude; // Changed to magnitude for 2D movement
     public Vector2 GetVelocity() => rb.linearVelocity;
+
+    // Attack system public methods
+    public bool IsAttacking() => isAttacking;
+    public bool CanAttack() => canAttack;
+    public EnemyMovement GetCurrentTarget() => currentTarget;
+    public List<EnemyMovement> GetEnemiesInRange() => new List<EnemyMovement>(enemiesInRange);
+    public float GetAttackRange() => attackRange;
+
+    // Public setters for upgrades/modifications
+    public void SetAttackRange(float newRange) => attackRange = newRange;
+    public void SetAttackCooldown(float newCooldown) => attackCooldown = newCooldown;
+    public void SetAutoAttack(bool enabled) => autoAttack = enabled;
 
     // Method to temporarily disable movement (for cutscenes, etc.)
     public void SetMovementEnabled(bool enabled)
@@ -217,7 +480,35 @@ public class PlayerMovement : MonoBehaviour
         rb.AddForce(force, mode);
     }
 
-    // Gizmos for debugging (bullet hell game - show movement only)
+    // Force attack method (for special abilities)
+    public void ForceAttack()
+    {
+        if (currentTarget != null && !isAttacking)
+        {
+            StartAttack();
+        }
+    }
+
+    // Attack all enemies in range (for area attacks)
+    public void AttackAllInRange()
+    {
+        if (!canAttack || isAttacking || playerStats == null || playerStats.IsDead())
+            return;
+
+        foreach (EnemyMovement enemy in enemiesInRange)
+        {
+            if (enemy != null)
+            {
+                EnemyStats enemyStats = enemy.GetComponent<EnemyStats>();
+                if (enemyStats != null && !enemyStats.IsDead())
+                {
+                    enemyStats.TakeDamage(playerStats.GetDamage());
+                }
+            }
+        }
+    }
+
+    // Gizmos for debugging
     void OnDrawGizmosSelected()
     {
         // Draw movement direction indicator
@@ -233,5 +524,26 @@ public class PlayerMovement : MonoBehaviour
                 Gizmos.DrawRay(transform.position, velocityDirection * 2f);
             }
         }
+
+        // Draw attack range
+        if (showAttackRange)
+        {
+            Gizmos.color = attackRangeColor;
+            Gizmos.DrawWireSphere(transform.position, attackRange);
+
+            // Draw line to current target
+            if (Application.isPlaying && currentTarget != null)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(transform.position, currentTarget.transform.position);
+            }
+        }
+    }
+
+    // Validation in editor
+    void OnValidate()
+    {
+        if (attackRange < 0) attackRange = 0;
+        if (attackCooldown < 0.1f) attackCooldown = 0.1f;
     }
 }
