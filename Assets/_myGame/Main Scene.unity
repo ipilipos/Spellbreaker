@@ -1492,6 +1492,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8739545325366253347, guid: 05c1fd12dea8cae479d6066e2a9b86be, type: 3}
+      propertyPath: _animationName
+      value: Idle
+      objectReference: {fileID: 0}
     - target: {fileID: 9103164675302906666, guid: 05c1fd12dea8cae479d6066e2a9b86be, type: 3}
       propertyPath: m_Mesh
       value: 

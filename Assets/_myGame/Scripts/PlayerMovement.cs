@@ -600,6 +600,6 @@ public class PlayerMovement : MonoBehaviour
     void OnValidate()
     {
         if (attackRange < 0) attackRange = 0;
-        if (attackCooldown < 0.1f) attackCooldown = 0.1f;
+       
     }
 }
