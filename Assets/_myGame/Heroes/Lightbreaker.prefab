@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3632496482814618644}
   - component: {fileID: 1004458795155593198}
   - component: {fileID: 3969058239973184074}
+  - component: {fileID: 2159548073041241262}
   m_Layer: 0
   m_Name: Lightbreaker
   m_TagString: Untagged
@@ -28,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 68, y: 68, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4872575272576623967}
@@ -52,7 +53,7 @@ MonoBehaviour:
   Shield: 16
   Bow: 29
   Quiver: 9
-  Staff: 28
+  Staff: 25
   DuelistOffhand: 1
   Armor: 6
   Helmet: 19
@@ -60,7 +61,7 @@ MonoBehaviour:
   Arm: 7
   Feet: 17
   Hair: 9
-  Face: 21
+  Face: 18
   IsAutoUpdate: 1
 --- !u!114 &3969058239973184074
 MonoBehaviour:
@@ -76,6 +77,29 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   MyJob: 3
   ArrowPrefab: {fileID: 42269432641808743, guid: bc06286fb4ae27745b357c9f6f22f6b0, type: 3}
+--- !u!114 &2159548073041241262
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1307942275430680269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a2071dc81aecba47ab62748f63acfb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 5
+  acceleration: 10
+  deceleration: 15
+  normalizeMovement: 1
+  useBoundaries: 1
+  leftBoundary: -10
+  rightBoundary: 10
+  topBoundary: 5
+  bottomBoundary: -5
+  enableController: 1
+  deadZone: 0.1
 --- !u!1 &1976040067079727762
 GameObject:
   m_ObjectHideFlags: 0
@@ -173,18 +197,9 @@ MeshRenderer:
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: c44542ab5ba09b2459e1dd4696c7edfb, type: 2}
-  - {fileID: 2100000, guid: 47228311f0378dd49a81ef48c3a3a3cb, type: 2}
-  - {fileID: 2100000, guid: c44542ab5ba09b2459e1dd4696c7edfb, type: 2}
-  - {fileID: 2100000, guid: 47228311f0378dd49a81ef48c3a3a3cb, type: 2}
-  - {fileID: 2100000, guid: f6eea307cf3e08e429470e562ebd8f5c, type: 2}
-  - {fileID: 2100000, guid: 47228311f0378dd49a81ef48c3a3a3cb, type: 2}
-  - {fileID: 2100000, guid: c44542ab5ba09b2459e1dd4696c7edfb, type: 2}
   - {fileID: 2100000, guid: f6eea307cf3e08e429470e562ebd8f5c, type: 2}
   - {fileID: 2100000, guid: c44542ab5ba09b2459e1dd4696c7edfb, type: 2}
   - {fileID: 2100000, guid: 47228311f0378dd49a81ef48c3a3a3cb, type: 2}
-  - {fileID: 2100000, guid: c44542ab5ba09b2459e1dd4696c7edfb, type: 2}
-  - {fileID: 2100000, guid: 47228311f0378dd49a81ef48c3a3a3cb, type: 2}
-  - {fileID: 2100000, guid: c44542ab5ba09b2459e1dd4696c7edfb, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
