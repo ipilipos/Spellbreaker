@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+using Spine.Unity;
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement Settings")]
@@ -54,7 +54,19 @@ public class PlayerMovement : MonoBehaviour
     private List<EnemyMovement> enemiesInRange = new List<EnemyMovement>();
     private EnemyMovement currentTarget;
     private LineRenderer attackEffect;
+    [Header("Damage Flash Settings")]
+    [SerializeField] private bool enableDamageFlash = true;
+    [SerializeField] private Color damageFlashColor = Color.red;
+    [SerializeField] private float flashDuration = 0.15f;
 
+    // Add these private variables
+    private SkeletonAnimation skeletonAnimation;
+    private bool isFlashing = false;
+    private Color originalColor = Color.white;
+
+    // Add this to your Start() method
+    // Get Spine skeleton animation from child CharacterGFX
+    [SerializeField] Transform characterGFX;
     void Start()
     {
         // Get required components
@@ -84,7 +96,7 @@ public class PlayerMovement : MonoBehaviour
 
         // Add BoxCollider2D if not present
         if (GetComponent<BoxCollider2D>() == null)
-        {
+        {   
             BoxCollider2D col = gameObject.AddComponent<BoxCollider2D>();
             col.size = new Vector2(1f, 2f);
         }
@@ -107,8 +119,51 @@ public class PlayerMovement : MonoBehaviour
         {
             playerStats.OnDeath += OnPlayerDeath;
         }
+
+        if (characterGFX != null)
+        {
+            skeletonAnimation = characterGFX.GetComponent<SkeletonAnimation>();
+            if (skeletonAnimation != null)
+            {
+                originalColor = skeletonAnimation.skeleton.GetColor();
+            }
+        }
+
+        if (playerStats != null)
+        {
+            playerStats.OnDamageTaken += OnPlayerDamageTaken;
+        }
+    }
+    void OnPlayerDamageTaken(int damage)
+    {
+        if (enableDamageFlash && !isFlashing)
+        {
+            StartCoroutine(FlashSprite());
+        }
     }
 
+    IEnumerator FlashSprite()
+    {
+        if (skeletonAnimation == null) yield break;
+
+        isFlashing = true;
+
+        // Store original color
+        Color originalSkeletonColor = skeletonAnimation.skeleton.GetColor();
+
+        // Flash to damage color
+        skeletonAnimation.skeleton.SetColor(damageFlashColor);
+
+        yield return new WaitForSeconds(flashDuration);
+
+        // Return to original color if player is not dead
+        if (playerStats != null && !playerStats.IsDead())
+        {
+            skeletonAnimation.skeleton.SetColor(originalSkeletonColor);
+        }
+
+        isFlashing = false;
+    }
     void Update()
     {
         HandleInput();
@@ -443,6 +498,7 @@ public class PlayerMovement : MonoBehaviour
         if (playerStats != null)
         {
             playerStats.OnDeath -= OnPlayerDeath;
+            playerStats.OnDamageTaken -= OnPlayerDamageTaken;
         }
     }
 

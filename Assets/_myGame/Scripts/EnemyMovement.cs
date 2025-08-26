@@ -1,8 +1,9 @@
 using System.Collections;
 using UnityEngine;
-
+using Spine.Unity;
 public class EnemyMovement : MonoBehaviour
 {
+
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 3f;
     [SerializeField] private float attackRange = 2f;
@@ -30,7 +31,19 @@ public class EnemyMovement : MonoBehaviour
     private bool isMoving = false;
     private float distanceToPlayer;
     private Vector2 moveDirection;
+    [Header("Damage Flash Settings")]
+    [SerializeField] private bool enableDamageFlash = true;
+    [SerializeField] private Color damageFlashColor = Color.red;
+    [SerializeField] private float flashDuration = 0.1f;
 
+    // Add these private variables
+    private SkeletonAnimation skeletonAnimation;
+    private bool isFlashing = false;
+    private Color originalColor = Color.white;
+
+    // Add this to your Start() method
+    // Get Spine skeleton animation component
+    
     // Enemy states
     public enum EnemyState
     {
@@ -102,8 +115,47 @@ public class EnemyMovement : MonoBehaviour
             stopDistance = attackRange * 0.8f;
             Debug.LogWarning($"Stop distance adjusted to {stopDistance} to be less than attack range");
         }
+        skeletonAnimation = GetComponent<SkeletonAnimation>();
+        if (skeletonAnimation != null)
+        {
+            originalColor = skeletonAnimation.skeleton.GetColor();
+        }
+
+        if (enemyStats != null)
+        {
+            enemyStats.OnDamageTaken += OnEnemyDamageTaken;
+        }
+    }
+    void OnEnemyDamageTaken(int damage)
+    {
+        if (enableDamageFlash && !isFlashing)
+        {
+            StartCoroutine(FlashSprite());
+        }
     }
 
+    IEnumerator FlashSprite()
+    {
+        if (skeletonAnimation == null) yield break;
+
+        isFlashing = true;
+
+        // Store original color
+        Color originalSkeletonColor = skeletonAnimation.skeleton.GetColor();
+
+        // Flash to damage color
+        skeletonAnimation.skeleton.SetColor(damageFlashColor);
+
+        yield return new WaitForSeconds(flashDuration);
+
+        // Return to original color if enemy is not dead
+        if (enemyStats != null && !enemyStats.IsDead())
+        {
+            skeletonAnimation.skeleton.SetColor(originalSkeletonColor);
+        }
+
+        isFlashing = false;
+    }
     void Update()
     {
         if (currentState == EnemyState.Dead || player == null || enemyStats == null || enemyStats.IsDead())
@@ -412,6 +464,7 @@ public class EnemyMovement : MonoBehaviour
         if (enemyStats != null)
         {
             enemyStats.OnDeath -= HandleDeath;
+            enemyStats.OnDamageTaken -= OnEnemyDamageTaken;
         }
 
         // NEW: Unsubscribe from player events
