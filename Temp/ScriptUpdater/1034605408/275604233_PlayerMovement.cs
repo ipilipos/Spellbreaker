@@ -149,9 +149,32 @@ public class PlayerMovement : MonoBehaviour
         isMoving = rb.linearVelocity.magnitude > 0.1f;
     }
 
-   
+    void HandleJump()
+    {
+        if (jumpPressed && isGrounded)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        }
 
-   
+        // Variable jump height
+        if (!jumpHeld && rb.linearVelocity.y > 0)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
+        }
+    }
+
+    void CheckGrounded()
+    {
+        wasGrounded = isGrounded;
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayerMask);
+
+        // Landing detection
+        if (!wasGrounded && isGrounded)
+        {
+            // Just landed
+            OnLanded();
+        }
+    }
 
     void HandleAnimations()
     {
@@ -193,7 +216,15 @@ public class PlayerMovement : MonoBehaviour
         // }
     }
 
-  
+    void OnLanded()
+    {
+        // Not needed for bullet hell game - removing
+    }
+
+    void CreateGroundCheck()
+    {
+        // Not needed for bullet hell game - removing
+    }
 
     // Public methods for external scripts
     public bool IsMoving() => isMoving;
